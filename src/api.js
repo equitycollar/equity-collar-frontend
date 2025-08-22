@@ -1,5 +1,5 @@
 // Replace with your real Render URL once deployed
-export const API_URL = import.meta.env.VITE_API_URL || "https://YOUR-SERVICE.onrender.com";
+export const API_URL = import.meta.env.VITE_API_URL || "https://equity-collar-api.onrender.com";
 
 export async function calculateCollar(payload){
   const res = await fetch(`${API_URL}/calculate`, {
