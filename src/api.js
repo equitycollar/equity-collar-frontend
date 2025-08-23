@@ -1,5 +1,5 @@
 // src/api.js
-export const API_URL = "https://equity-collar-api.onrender.com?v=2"; // 
+export const API_URL = "https://equity-collar-api.onrender.com"; // 
 
 export async function calculateCollar(payload){
   const res = await fetch(`${API_URL}/calculate`, {
