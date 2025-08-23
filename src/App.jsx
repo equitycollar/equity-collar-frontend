@@ -9,14 +9,13 @@ export default function App(){
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [res, setRes] = useState(null)
-  const [warn, setWarn] = useState('')
 
   const chartRef = useRef(null)
   const chartObj = useRef(null)
 
   // Load expirations when ticker changes
   useEffect(()=>{
-    setRes(null); setErr(''); setWarn('')
+    setRes(null); setErr('')
     getExpirations(form.ticker)
       .then(list => { setExps(list || []); if(list?.length) setForm(f=>({...f, expiration:list[0]})) })
       .catch(e => setErr(String(e)))
@@ -26,28 +25,27 @@ export default function App(){
   useEffect(()=>{
     if(!res) return
     const ctx = chartRef.current?.getContext('2d'); if(!ctx) return
-
-    // Sanity: min payoff should equal max_loss (flat left tail)
-    const minPayoff = Math.min(...res.payoff_values)
-    const mismatch = Math.abs(minPayoff - res.max_loss)
-    setWarn(mismatch > Math.max(50, Math.abs(res.max_loss)*0.02)
-      ? `Warning: min payoff (${minPayoff.toLocaleString()}) != max_loss (${res.max_loss.toLocaleString()})`
-      : '')
-
     if(chartObj.current) chartObj.current.destroy()
+
     chartObj.current = new Chart(ctx, {
       type: 'line',
       data: {
         labels: res.payoff_prices,
         datasets: [
-          { label: 'Payoff', data: res.payoff_values, tension: .15, pointRadius: 0 },
-          { label: 'Max Loss', data: res.payoff_prices.map(()=> res.max_loss), borderDash:[6,6], pointRadius:0 },
-          { label: 'Max Gain', data: res.payoff_prices.map(()=> res.max_gain), borderDash:[6,6], pointRadius:0 }
+          {
+            label: 'Payoff',
+            data: res.payoff_values,
+            pointRadius: 0,
+            // IMPORTANT: no smoothing so flats look flat
+            tension: 0,
+            cubicInterpolationMode: 'monotone'
+          }
         ]
       },
       options: {
         responsive: true,
         plugins: { title: { display: true, text: `${res.ticker} Collar Payoff` }},
+        elements: { line: { tension: 0 } },   // global safeguard
         scales: {
           x: { title: { display: true, text: 'Stock Price at Expiration' } },
           y: { title: { display: true, text: 'P/L ($)' } }
@@ -69,7 +67,7 @@ export default function App(){
   }
 
   const submit = async ()=>{
-    setLoading(true); setErr(''); setRes(null); setWarn('')
+    setLoading(true); setErr(''); setRes(null)
     try { setRes(await calculateCollar(form)) }
     catch(e){ setErr(String(e.message || e)) }
     finally { setLoading(false) }
@@ -100,7 +98,6 @@ export default function App(){
         <div className="row" style={{marginTop:14}}>
           <button className="btn" onClick={submit} disabled={loading}>{loading? 'Calculating…':'Calculate'}</button>
           {err && <span className="badge" style={{borderColor:'var(--err)', color:'#ffd9d9'}}>{err}</span>}
-          {warn && !err && <span className="badge" title="Sanity check">{warn}</span>}
         </div>
 
         {res && (
