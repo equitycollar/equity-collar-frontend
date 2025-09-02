@@ -1,5 +1,5 @@
 // Point directly at your Render URL (can switch to VITE_API_URL later)
-export const API_URL = "https://equity-collar-api.onrender.com";
+export const API_URL = "https://equity-collar-api2.onrender.com";
 
 export async function calculateCollar(payload){
   const url = `${API_URL}/calculate`;
