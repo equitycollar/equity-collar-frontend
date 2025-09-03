@@ -1,10 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { calculateCollar, getExpirations } from './api'
-import { Chart, LineController, LineElement, PointElement, LinearScale, Title, CategoryScale } from 'chart.js'
-Chart.register(LineController, LineElement, PointElement, LinearScale, Title, CategoryScale)
+import {
+  Chart,
+  LineController,
+  LineElement,
+  PointElement,
+  LinearScale,
+  Title,
+  CategoryScale,
+  Tooltip,
+  Legend
+} from 'chart.js'
+
+Chart.register(LineController, LineElement, PointElement, LinearScale, Title, CategoryScale, Tooltip, Legend)
 
 export default function App(){
-  const [form, setForm] = useState({ ticker: 'AAPL', shares: 100, entry_price: 160, put_strike: 150, call_strike: 175, expiration: '' })
+  const [form, setForm] = useState({
+    ticker: 'AAPL', shares: 100, entry_price: 220,
+    put_strike: 180, call_strike: 250, expiration: ''
+  })
   const [exps, setExps] = useState([])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
@@ -13,7 +27,7 @@ export default function App(){
   const chartRef = useRef(null)
   const chartObj = useRef(null)
 
-  // Load expirations when ticker changes
+  // load expirations
   useEffect(()=>{
     setRes(null); setErr('')
     getExpirations(form.ticker)
@@ -21,38 +35,49 @@ export default function App(){
       .catch(e => setErr(String(e)))
   }, [form.ticker])
 
-  // Draw chart AFTER results render
+  // draw chart when res changes
   useEffect(()=>{
     if(!res) return
     const ctx = chartRef.current?.getContext('2d'); if(!ctx) return
     if(chartObj.current) chartObj.current.destroy()
 
+    // ensure numeric arrays and sorted by price
+    const xs = res.payoff_prices.map(Number)
+    const ys = res.payoff_values.map(Number)
+    const pairs = xs.map((x,i)=>[x, ys[i]]).sort((a,b)=>a[0]-b[0])
+    const labels = pairs.map(p=>p[0])
+    const data = pairs.map(p=>p[1])
+
     chartObj.current = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: res.payoff_prices,
-        datasets: [
-          {
-            label: 'Payoff',
-            data: res.payoff_values,
-            pointRadius: 0,
-            // IMPORTANT: no smoothing so flats look flat
-            tension: 0,
-            cubicInterpolationMode: 'monotone'
-          }
-        ]
+        labels,
+        datasets: [{
+          label: 'Payoff at Expiration',
+          data,
+          pointRadius: 0,
+          // critical: no bezier smoothing; use stepped line for piecewise payoff
+          tension: 0,
+          cubicInterpolationMode: 'monotone',
+          stepped: true
+        }]
       },
       options: {
         responsive: true,
-        plugins: { title: { display: true, text: `${res.ticker} Collar Payoff` }},
-        elements: { line: { tension: 0 } },   // global safeguard
+        plugins: {
+          title: { display: true, text: `${res.ticker} Collar Payoff` },
+          legend: { display: false },
+          tooltip: { mode: 'nearest', intersect: false }
+        },
+        elements: { line: { tension: 0 } },
         scales: {
           x: { title: { display: true, text: 'Stock Price at Expiration' } },
           y: { title: { display: true, text: 'P/L ($)' } }
-        }
+        },
+        animation: false
       }
     })
-    return ()=> { chartObj.current?.destroy() }
+    return ()=> chartObj.current?.destroy()
   }, [res])
 
   const onChange = (e)=>{
@@ -68,9 +93,11 @@ export default function App(){
 
   const submit = async ()=>{
     setLoading(true); setErr(''); setRes(null)
-    try { setRes(await calculateCollar(form)) }
-    catch(e){ setErr(String(e.message || e)) }
-    finally { setLoading(false) }
+    try{
+      const data = await calculateCollar(form)
+      setRes(data)
+    }catch(e){ setErr(String(e.message || e)) }
+    finally{ setLoading(false) }
   }
 
   const kpis = useMemo(()=> res ? [
@@ -120,7 +147,7 @@ export default function App(){
             </table>
 
             <div className="chart">
-              <canvas ref={chartRef} height="220" />
+              <canvas ref={chartRef} height="240" />
               <div className="note">Payoff uses delayed data and mid-pricing for premiums.</div>
             </div>
           </>
