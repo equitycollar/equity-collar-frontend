@@ -1,4 +1,4 @@
-// src/api.js  — SINGLE source of truth
+// src/api.js — SINGLE source of truth
 
 export const API_URL =
   import.meta.env.VITE_API_URL || "https://equity-collar-api2.onrender.com";
@@ -19,7 +19,6 @@ export async function getExpirations(ticker) {
   return res.json();
 }
 
-// PREMIUM (requires X-API-KEY header)
 export async function calculatePremium(payload, apiKey) {
   const res = await fetch(`${API_URL}/premium/calculate`, {
     method: "POST",
