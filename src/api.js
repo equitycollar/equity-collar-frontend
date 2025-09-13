@@ -1,6 +1,5 @@
-// src/api.js — SINGLE source of truth
+// src/api.js — SINGLE source of truth (proxy-friendly)
 
-// Default to the proxy. You can override with VITE_API_URL if needed.
 export const API_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/$/, "");
 const usingProxy = !/^https?:\/\//i.test(API_URL); // true when API_URL=/api
 
@@ -15,30 +14,45 @@ export async function calculateCollar(payload) {
 }
 
 export async function getExpirations(ticker) {
-  // Works with your legacy route (/expirations/{ticker}); backend also supports ?symbol=
-  const res = await fetch(`${API_URL}/expirations/${encodeURIComponent(ticker)}`);
-  if (!res.ok) throw new Error("Failed to fetch expirations");
-  return res.json();
+  // 1) Try query-style (returns { symbol, expirations: [...] })
+  let res = await fetch(`${API_URL}/expirations?symbol=${encodeURIComponent(ticker)}`);
+  if (res.ok) {
+    const json = await res.json();
+    if (json && Array.isArray(json.expirations)) return json.expirations;
+  } else {
+    // If not ok, try to capture the message (helps a lot)
+    const txt = await res.text().catch(() => "");
+    console.warn("Expirations query endpoint failed:", res.status, txt);
+  }
+
+  // 2) Fallback to legacy path-style (returns an array)
+  res = await fetch(`${API_URL}/expirations/${encodeURIComponent(ticker)}`);
+  if (res.ok) {
+    const json = await res.json();
+    if (Array.isArray(json)) return json;
+    // some backends return {expirations:[...]} even here
+    if (json && Array.isArray(json.expirations)) return json.expirations;
+  } else {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Failed to fetch expirations (HTTP ${res.status}) ${txt}`);
+  }
+
+  throw new Error("Failed to fetch expirations (unexpected response shape)");
 }
 
-// Note: when using the proxy (API_URL=/api), DO NOT send a premium key from the browser.
-// The serverless function injects it. If you bypass the proxy (API_URL is an https URL),
-// you can still pass a key and it will be sent.
+// Premium: when using the proxy (/api), do NOT send a key from the browser.
+// The Vercel function injects it server-side. If you bypass the proxy, you can still pass a key.
 export async function calculatePremium(payload, clientKey) {
   const headers = { "Content-Type": "application/json" };
-
   if (!usingProxy && clientKey) {
-    // Direct-to-Render mode only. Backend accepts either header name.
     headers["X-Premium-Key"] = clientKey;
     headers["X-API-KEY"] = clientKey;
   }
-
   const res = await fetch(`${API_URL}/premium/calculate`, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
   });
-
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Premium HTTP ${res.status} ${text}`);
