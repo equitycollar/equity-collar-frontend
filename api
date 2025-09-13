@@ -1,0 +1,62 @@
+// api/[...path].js
+/**
+ * Catch-all proxy for /api/* → BACKEND_URL/*
+ * - Injects X-Premium-Key for /api/premium/calculate
+ * - Keeps your secret on the server (never sent to the browser)
+ * - Works with any frontend (Vite, etc.)
+ */
+export default async function handler(req, res) {
+  const BACKEND_URL = process.env.BACKEND_URL;
+  const PREMIUM_API_KEY = process.env.PREMIUM_API_KEY || '';
+
+  if (!BACKEND_URL) {
+    res.status(500).json({ error: 'BACKEND_URL env not set' });
+    return;
+  }
+
+  // Resolve target path and query
+  const pathSeg = req.query.path;
+  const path = Array.isArray(pathSeg) ? pathSeg.join('/') : (pathSeg || '');
+  const q = req.url && req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  const targetUrl = `${BACKEND_URL.replace(/\/$/, '')}/${path}${q}`;
+
+  // Clone headers and sanitize
+  const headers = {};
+  for (const [k, v] of Object.entries(req.headers)) {
+    if (typeof v === 'string') headers[k] = v;
+  }
+  // Never forward client-supplied premium keys
+  delete headers['x-premium-key'];
+  delete headers['x-api-key'];
+  delete headers['content-length'];
+
+  // Inject the server-side key for premium calculate
+  const isPremiumCalc = path.toLowerCase().startsWith('premium/calculate') && PREMIUM_API_KEY;
+  if (isPremiumCalc) {
+    headers['X-Premium-Key'] = PREMIUM_API_KEY;
+  }
+
+  const method = (req.method || 'GET').toUpperCase();
+  const body = method === 'GET' || method === 'HEAD' ? undefined : req.body;
+
+  try {
+    const resp = await fetch(targetUrl, {
+      method,
+      headers,
+      body: body && typeof body !== 'string' && !(body instanceof Buffer)
+        ? JSON.stringify(body)
+        : body,
+      redirect: 'manual',
+    });
+
+    const buf = Buffer.from(await resp.arrayBuffer());
+    resp.headers.forEach((value, key) => {
+      if (!['content-length'].includes(key.toLowerCase())) {
+        res.setHeader(key, value);
+      }
+    });
+    res.status(resp.status).send(buf);
+  } catch (err) {
+    res.status(502).json({ error: 'Proxy error', detail: String(err) });
+  }
+}
