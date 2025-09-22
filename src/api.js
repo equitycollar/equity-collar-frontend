@@ -41,30 +41,21 @@ export async function getExpirations(ticker) {
 }
 
 // src/api.js
-
 export const API_URL = (import.meta.env.VITE_API_URL ?? "https://equity-collar-api2.onrender.com").replace(/\/$/, "");
-const usingProxy = !/^https?:\/\//i.test(API_URL); // true only if API_URL="/api"
+const usingProxy = !/^https?:\/\//i.test(API_URL); // false when calling Render directly
 
 export async function calculatePremium(payload, clientKey) {
-  // If using the Vercel proxy, don't send key (proxy injects it server-side).
-  // If calling Render directly (API_URL starts with https), put the key in the body to avoid CORS preflight.
-  const body = usingProxy
-    ? JSON.stringify(payload)
-    : JSON.stringify({ ...payload, api_key: clientKey });
-
   const headers = { "Content-Type": "application/json" };
-  // Do NOT set custom auth headers in direct mode (avoids preflight)
-  // If you still want to support header mode, it's fine too—but we won't set it here.
+  const body = usingProxy
+    ? JSON.stringify(payload)                          // proxy would inject key
+    : JSON.stringify({ ...payload, api_key: clientKey }); // direct → put key in body
 
-  const res = await fetch(`${API_URL}/premium/calculate`, {
-    method: "POST",
-    headers,
-    body,
-  });
+  const res = await fetch(`${API_URL}/premium/calculate`, { method: "POST", headers, body });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Premium HTTP ${res.status} ${text}`);
   }
   return res.json();
 }
+
 
