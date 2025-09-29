@@ -8,6 +8,82 @@ export default function App() {
   return <PremiumDebug />;
 }
 
+// PremiumPanel.jsx (or wherever your form lives)
+import { useEffect, useState } from "react";
+import { calculatePremium } from "./api";
+
+export default function PremiumPanel({ form }) {
+  const [premium, setPremium] = useState(null);
+  const [pErr, setPErr] = useState("");
+  const [pLoading, setPLoading] = useState(false);
+
+  // read key from an input or .env; this reads from localStorage for convenience
+  const apiKey = localStorage.getItem("PREMIUM_API_KEY") || "";
+
+  useEffect(() => {
+    const { ticker, expiration, put_strike, call_strike, shares } = form || {};
+    if (!ticker || !expiration || !put_strike || !call_strike || !apiKey) return;
+
+    setPLoading(true);
+    setPErr("");
+    const payload = {
+      ticker: ticker.toUpperCase(),
+      shares: Number(shares || 100),
+      entry_price: 1,                // backend overrides to spot
+      put_strike: Number(put_strike),
+      call_strike: Number(call_strike),
+      expiration,                    // "YYYY-MM-DD"
+    };
+
+    // IMPORTANT: this is the call that should appear in the Network tab
+    calculatePremium(payload, apiKey)
+      .then((resp) => setPremium(resp))
+      .catch((e) => setPErr(String(e.message || e)))
+      .finally(() => setPLoading(false));
+  }, [form.ticker, form.expiration, form.put_strike, form.call_strike, form.shares, apiKey]);
+
+  // ----- render (very simple) -----
+  if (pLoading) return <div>Loading premium…</div>;
+  if (pErr) return <pre style={{color:"crimson"}}>{pErr}</pre>;
+  if (!premium) return <div>Premium not loaded yet</div>;
+
+  return (
+    <div>
+      <div>AnchorLock Score: <b>{premium?.signals?.score ?? premium?.anchorlock?.score ?? "—"}</b></div>
+      <div>Signal: <b>{premium?.signal ?? premium?.signals?.action ?? "—"}</b></div>
+      <div>IV (Put/Call): <b>{premium?.iv_put ?? "—"}</b> / <b>{premium?.iv_call ?? "—"}</b></div>
+
+      <h4>Portfolio Greeks (Net)</h4>
+      <ul>
+        <li>Delta: <b>{premium?.portfolioGreeks?.net?.Delta ?? premium?.greeks?.delta ?? premium?.delta ?? "—"}</b></li>
+        <li>Gamma: <b>{premium?.portfolioGreeks?.net?.Gamma ?? premium?.greeks?.gamma ?? premium?.gamma ?? "—"}</b></li>
+        <li>Theta: <b>{premium?.portfolioGreeks?.net?.Theta ?? premium?.greeks?.theta ?? premium?.theta ?? "—"}</b></li>
+        <li>Vega:  <b>{premium?.portfolioGreeks?.net?.Vega  ?? premium?.greeks?.vega  ?? premium?.vega  ?? "—"}</b></li>
+        <li>Rho:   <b>{premium?.portfolioGreeks?.net?.Rho   ?? premium?.greeks?.rho   ?? premium?.rho   ?? "—"}</b></li>
+      </ul>
+
+      <h4>Components</h4>
+      <ul>
+        <li>RSI: {premium?.components?.RSI ?? "—"}</li>
+        <li>RSI Score: {premium?.components?.RSIScore ?? "—"}</li>
+        <li>Momentum 30d: {premium?.components?.Momentum30d ?? "—"}</li>
+        <li>200-DMA: {premium?.components?.DMA200 ?? "—"}</li>
+        <li>Gap to 200-DMA: {premium?.components?.GapTo200DMA ?? "—"}</li>
+        <li>200-DMA 30d slope: {premium?.components?.DMA200Slope30d ?? "—"}</li>
+        <li>Earnings Score: {premium?.components?.EarningsScore ?? "—"}</li>
+      </ul>
+
+      <h4>Assumptions</h4>
+      <ul>
+        <li>r: {premium?.assumptions?.r ?? "—"}</li>
+        <li>q: {premium?.assumptions?.q ?? "—"}</li>
+        <li>Time to Exp (yrs): {premium?.assumptions?.time_to_exp_years ?? "—"}</li>
+      </ul>
+    </div>
+  );
+}
+
+
 Chart.register(LineController, LineElement, PointElement, LinearScale, Title, CategoryScale, Tooltip, Legend)
 
 export default function App(){
