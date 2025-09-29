@@ -3,6 +3,10 @@ import { calculateCollar, getExpirations, calculatePremium } from './api'
 import {
   Chart, LineController, LineElement, PointElement, LinearScale, Title, CategoryScale, Tooltip, Legend
 } from 'chart.js'
+import PremiumDebug from "./PremiumDebug";
+export default function App() {
+  return <PremiumDebug />;
+}
 
 Chart.register(LineController, LineElement, PointElement, LinearScale, Title, CategoryScale, Tooltip, Legend)
 
