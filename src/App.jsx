@@ -61,7 +61,7 @@ export default function App() {
           data: pairs.map(p => p[1]),
           pointRadius: 0,
           tension: 0,
-          stepped: true
+          stepped: false
         }]
       },
       options: {
